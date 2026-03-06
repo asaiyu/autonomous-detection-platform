@@ -14,13 +14,16 @@ from app.detection.field_access import get_field
 from app.detection.rule_loader import load_rules
 from app.detection.types import AlertMatch, ReplayResult
 from app.models.alert import Alert
+from app.models.coverage_snapshot import CoverageSnapshot
 from app.models.event import Event
+from app.models.replay_validation import ReplayValidation
 
 _ALLOWED_FP_THRESHOLD = 2
 
 
 def replay_dataset(dataset_id: str, ruleset_id: str, mode: str, db: Session) -> ReplayResult:
-    started_at = _utc_now()
+    started_dt = datetime.now(timezone.utc)
+    started_at = _to_utc_iso(started_dt)
 
     if mode not in {"attack_validation", "baseline_validation", "full_evaluation"}:
         raise ValueError(f"unsupported replay mode: {mode}")
@@ -57,7 +60,23 @@ def replay_dataset(dataset_id: str, ruleset_id: str, mode: str, db: Session) -> 
 
     verdict = "PASS" if attack_tp_count >= 1 and baseline_fp_count <= _ALLOWED_FP_THRESHOLD else "FAIL"
 
-    finished_at = _utc_now()
+    finished_dt = datetime.now(timezone.utc)
+    finished_at = _to_utc_iso(finished_dt)
+
+    _persist_replay_artifacts(
+        db=db,
+        dataset_id=dataset_id,
+        ruleset_id=ruleset_id,
+        mode=mode,
+        attack_tp_count=attack_tp_count,
+        baseline_fp_count=baseline_fp_count,
+        coverage_rate=coverage_rate,
+        alerts_generated=len(created_alert_ids),
+        verdict=verdict,
+        allowed_fp_threshold=_ALLOWED_FP_THRESHOLD,
+        started_dt=started_dt,
+        finished_dt=finished_dt,
+    )
 
     return ReplayResult(
         dataset_id=dataset_id,
@@ -225,6 +244,63 @@ def _load_events_file(path: Path, required: bool = True) -> list[dict[str, Any]]
     return sorted(events, key=lambda event: (_event_timestamp(event), str(get_field(event, "event_id") or "")))
 
 
+def _persist_replay_artifacts(
+    db: Session,
+    dataset_id: str,
+    ruleset_id: str,
+    mode: str,
+    attack_tp_count: int,
+    baseline_fp_count: int,
+    coverage_rate: float | None,
+    alerts_generated: int,
+    verdict: str,
+    allowed_fp_threshold: int,
+    started_dt: datetime,
+    finished_dt: datetime,
+) -> None:
+    results_json: dict[str, Any] = {
+        "dataset_id": dataset_id,
+        "ruleset_id": ruleset_id,
+        "mode": mode,
+        "alerts_generated": alerts_generated,
+        "attack_tp_count": attack_tp_count,
+        "baseline_fp_count": baseline_fp_count,
+        "coverage_rate": coverage_rate,
+        "allowed_fp_threshold": allowed_fp_threshold,
+    }
+
+    validation = ReplayValidation(
+        attack_dataset_id=dataset_id if mode in {"attack_validation", "full_evaluation"} else None,
+        baseline_dataset_id=dataset_id if mode in {"baseline_validation", "full_evaluation"} else None,
+        replay_started_at=started_dt,
+        replay_finished_at=finished_dt,
+        results_json=results_json,
+        verdict=verdict,
+        report=f"Replay {verdict}: tp={attack_tp_count} fp={baseline_fp_count}",
+        status=verdict.lower(),
+        details=results_json,
+        validated_at=finished_dt,
+    )
+    db.add(validation)
+
+    metrics_json: dict[str, Any] = {
+        "coverage_rate": coverage_rate,
+        "attack_tp_count": attack_tp_count,
+        "baseline_fp_count": baseline_fp_count,
+        "alerts_generated": alerts_generated,
+    }
+    snapshot = CoverageSnapshot(
+        dataset_id=dataset_id,
+        ruleset_id_text=ruleset_id,
+        computed_at=finished_dt,
+        metrics_json=metrics_json,
+        coverage_percent=coverage_rate if coverage_rate is not None else 0.0,
+        summary=metrics_json,
+    )
+    db.add(snapshot)
+    db.commit()
+
+
 def _event_timestamp(event: dict[str, Any]) -> datetime:
     raw = get_field(event, "timestamp")
     if isinstance(raw, str) and raw:
@@ -238,5 +314,5 @@ def _event_timestamp(event: dict[str, Any]) -> datetime:
     return datetime(1970, 1, 1, tzinfo=timezone.utc)
 
 
-def _utc_now() -> str:
-    return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+def _to_utc_iso(value: datetime) -> str:
+    return value.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")

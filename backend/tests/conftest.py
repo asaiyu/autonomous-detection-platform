@@ -8,10 +8,20 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
+from app.db.base import Base
 from app.db.session import get_db
 from app.main import app
-from app.models.alert import Alert
-from app.models.event import Event
+from app.models import (  # noqa: F401
+    alert,
+    attack_run,
+    coverage_evaluation,
+    coverage_snapshot,
+    event,
+    finding,
+    replay_validation,
+    rule_proposal,
+    ruleset,
+)
 
 
 @pytest.fixture
@@ -21,8 +31,7 @@ def client() -> Generator[TestClient, None, None]:
         connect_args={"check_same_thread": False},
         poolclass=StaticPool,
     )
-    Event.__table__.create(bind=engine)
-    Alert.__table__.create(bind=engine)
+    Base.metadata.create_all(bind=engine)
     TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
     def override_get_db() -> Generator[Session, None, None]:

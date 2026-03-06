@@ -17,6 +17,9 @@ router = APIRouter()
 
 @router.get("", response_model=EventListResponse)
 def list_events(
+    query: Optional[str] = Query(None),
+    start: Optional[datetime] = Query(None),
+    end: Optional[datetime] = Query(None),
     start_timestamp: Optional[datetime] = Query(None),
     end_timestamp: Optional[datetime] = Query(None),
     source_type: Optional[str] = Query(None),
@@ -24,16 +27,20 @@ def list_events(
     q: Optional[str] = Query(None),
     db: Session = Depends(get_db),
 ) -> EventListResponse:
+    text_query = query or q
+    start_time = start or start_timestamp
+    end_time = end or end_timestamp
+
     query = db.query(Event)
 
-    if start_timestamp is not None:
-        query = query.filter(Event.occurred_at >= _ensure_utc(start_timestamp))
-    if end_timestamp is not None:
-        query = query.filter(Event.occurred_at <= _ensure_utc(end_timestamp))
+    if start_time is not None:
+        query = query.filter(Event.occurred_at >= _ensure_utc(start_time))
+    if end_time is not None:
+        query = query.filter(Event.occurred_at <= _ensure_utc(end_time))
     if source_type:
         query = query.filter(Event.source == source_type)
-    if q:
-        query = query.filter(cast(Event.canonical_event_json, Text).ilike(f"%{q}%"))
+    if text_query:
+        query = query.filter(cast(Event.canonical_event_json, Text).ilike(f"%{text_query}%"))
 
     rows = query.order_by(Event.occurred_at.desc()).limit(limit).all()
     items = [_to_event_response(row) for row in rows]

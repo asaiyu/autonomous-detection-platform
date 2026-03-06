@@ -4,6 +4,7 @@ import uuid
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any, Optional
+from urllib.parse import urlparse
 
 
 SUPPORTED_SOURCE_TYPES = {"dns", "firewall", "windows", "macos", "http", "application"}
@@ -32,7 +33,7 @@ def normalize_event(source_type: str, raw_event: dict[str, Any], timestamp: Opti
 
 def parse_timestamp(raw_timestamp: Optional[str]) -> datetime:
     if not raw_timestamp:
-        return datetime.now(timezone.utc)
+        return datetime(1970, 1, 1, tzinfo=timezone.utc)
 
     normalized = raw_timestamp.strip()
     if normalized.endswith("Z"):
@@ -76,18 +77,21 @@ def _normalize_dns(event_id: uuid.UUID, occurred_at: datetime, raw_event: dict[s
     canonical["dns"] = {
         "query": _first_non_none(raw_event.get("query"), raw_event.get("qname")),
         "record_type": _first_non_none(raw_event.get("record_type"), raw_event.get("qtype")),
-        "response_code": _first_non_none(raw_event.get("response_code"), raw_event.get("rcode")),
+        "rcode": _first_non_none(raw_event.get("rcode"), raw_event.get("response_code")),
         "answers": raw_event.get("answers"),
     }
     canonical["network"] = {
-        "client_ip": _first_non_none(raw_event.get("client_ip"), raw_event.get("src_ip")),
-        "server_ip": _first_non_none(raw_event.get("server_ip"), raw_event.get("dst_ip")),
+        "src_ip": _first_non_none(raw_event.get("client_ip"), raw_event.get("src_ip")),
+        "dst_ip": _first_non_none(raw_event.get("server_ip"), raw_event.get("dst_ip")),
     }
 
     return canonical
 
 
 def _normalize_http(event_id: uuid.UUID, occurred_at: datetime, raw_event: dict[str, Any]) -> dict[str, Any]:
+    url_value = _first_non_none(raw_event.get("url"), raw_event.get("request_url"))
+    parsed_url = urlparse(str(url_value)) if url_value is not None else None
+
     canonical: dict[str, Any] = _base_event(
         source_type="http",
         event_id=event_id,
@@ -108,13 +112,15 @@ def _normalize_http(event_id: uuid.UUID, occurred_at: datetime, raw_event: dict[
 
     canonical["http"] = {
         "method": _first_non_none(raw_event.get("method"), raw_event.get("http_method")),
-        "url": _first_non_none(raw_event.get("url"), raw_event.get("request_url")),
+        "url": url_value,
+        "path": parsed_url.path if parsed_url else None,
+        "query": parsed_url.query if parsed_url else None,
         "status_code": _first_non_none(raw_event.get("status_code"), raw_event.get("response_status")),
         "user_agent": _first_non_none(raw_event.get("user_agent"), raw_event.get("ua")),
     }
     canonical["network"] = {
-        "client_ip": _first_non_none(raw_event.get("client_ip"), raw_event.get("src_ip")),
-        "server_ip": _first_non_none(raw_event.get("server_ip"), raw_event.get("dst_ip")),
+        "src_ip": _first_non_none(raw_event.get("client_ip"), raw_event.get("src_ip")),
+        "dst_ip": _first_non_none(raw_event.get("server_ip"), raw_event.get("dst_ip")),
     }
 
     return canonical

@@ -26,6 +26,7 @@ class Alert(Base):
     status: Mapped[str] = mapped_column(String(32), nullable=False, default="open")
     evidence_event_ids: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
     evidence_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+    tags: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
     extra: Mapped[Optional[dict[str, Any]]] = mapped_column("metadata", JSON, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
