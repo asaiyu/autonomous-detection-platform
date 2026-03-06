@@ -5,7 +5,7 @@ import os
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Optional
 
 from sqlalchemy.orm import Session
 
@@ -14,9 +14,13 @@ from app.detection.field_access import get_field
 from app.detection.rule_loader import load_rules
 from app.detection.types import AlertMatch, ReplayResult
 from app.models.alert import Alert
+from app.models.attack_run import AttackRun
+from app.models.coverage_evaluation import CoverageEvaluation
 from app.models.coverage_snapshot import CoverageSnapshot
 from app.models.event import Event
+from app.models.finding import Finding
 from app.models.replay_validation import ReplayValidation
+from app.models.ruleset import Ruleset
 
 _ALLOWED_FP_THRESHOLD = 2
 
@@ -31,6 +35,9 @@ def replay_dataset(dataset_id: str, ruleset_id: str, mode: str, db: Session) -> 
     dataset_dir = resolve_datasets_dir() / dataset_id
     if not dataset_dir.exists():
         raise FileNotFoundError(f"dataset not found: {dataset_dir}")
+
+    ruleset = _get_or_create_ruleset(db=db, ruleset_id=ruleset_id)
+    replay_run = _create_replay_run(db=db, dataset_id=dataset_id, mode=mode, started_dt=started_dt)
 
     rules = load_rules(ruleset_id=ruleset_id)
     engine = DetectionEngine(rules)
@@ -52,6 +59,7 @@ def replay_dataset(dataset_id: str, ruleset_id: str, mode: str, db: Session) -> 
         dataset_id=dataset_id,
         ruleset_id=ruleset_id,
         mode=mode,
+        replay_run_id=replay_run.id,
     )
 
     attack_tp_count = len(attack_matches)
@@ -62,11 +70,25 @@ def replay_dataset(dataset_id: str, ruleset_id: str, mode: str, db: Session) -> 
 
     finished_dt = datetime.now(timezone.utc)
     finished_at = _to_utc_iso(finished_dt)
+    replay_run.status = "completed"
+    replay_run.end_time = finished_dt
+    replay_run.finished_at = finished_dt
+    replay_run.summary = f"Replay {verdict}: tp={attack_tp_count} fp={baseline_fp_count}"
+
+    _persist_findings_and_coverage_evaluations(
+        db=db,
+        dataset_dir=dataset_dir,
+        replay_run_id=replay_run.id,
+        finished_dt=finished_dt,
+        attack_matches=attack_matches,
+    )
 
     _persist_replay_artifacts(
         db=db,
         dataset_id=dataset_id,
         ruleset_id=ruleset_id,
+        ruleset_uuid=ruleset.id,
+        replay_run_id=replay_run.id,
         mode=mode,
         attack_tp_count=attack_tp_count,
         baseline_fp_count=baseline_fp_count,
@@ -115,6 +137,7 @@ def _persist_alerts(
     dataset_id: str,
     ruleset_id: str,
     mode: str,
+    replay_run_id: uuid.UUID,
 ) -> list[str]:
     created: list[Alert] = []
 
@@ -138,6 +161,7 @@ def _persist_alerts(
                 "dataset_id": dataset_id,
                 "ruleset_id": ruleset_id,
                 "replay_mode": mode,
+                "run_id": str(replay_run_id),
             },
         )
         db.add(alert)
@@ -150,7 +174,7 @@ def _persist_alerts(
     return [str(alert.id) for alert in created]
 
 
-def _resolve_source_event_uuid(db: Session, raw_event_id: str | None) -> uuid.UUID | None:
+def _resolve_source_event_uuid(db: Session, raw_event_id: Optional[str]) -> Optional[uuid.UUID]:
     if raw_event_id is None:
         return None
 
@@ -165,7 +189,7 @@ def _resolve_source_event_uuid(db: Session, raw_event_id: str | None) -> uuid.UU
     return candidate
 
 
-def _compute_coverage_rate(dataset_dir: Path, attack_matches: list[AlertMatch]) -> float | None:
+def _compute_coverage_rate(dataset_dir: Path, attack_matches: list[AlertMatch]) -> Optional[float]:
     findings_path = dataset_dir / "findings.json"
     if not findings_path.exists():
         return None
@@ -248,10 +272,12 @@ def _persist_replay_artifacts(
     db: Session,
     dataset_id: str,
     ruleset_id: str,
+    ruleset_uuid: uuid.UUID,
+    replay_run_id: uuid.UUID,
     mode: str,
     attack_tp_count: int,
     baseline_fp_count: int,
-    coverage_rate: float | None,
+    coverage_rate: Optional[float],
     alerts_generated: int,
     verdict: str,
     allowed_fp_threshold: int,
@@ -270,6 +296,7 @@ def _persist_replay_artifacts(
     }
 
     validation = ReplayValidation(
+        attack_run_id=replay_run_id,
         attack_dataset_id=dataset_id if mode in {"attack_validation", "full_evaluation"} else None,
         baseline_dataset_id=dataset_id if mode in {"baseline_validation", "full_evaluation"} else None,
         replay_started_at=started_dt,
@@ -290,6 +317,7 @@ def _persist_replay_artifacts(
         "alerts_generated": alerts_generated,
     }
     snapshot = CoverageSnapshot(
+        ruleset_id=ruleset_uuid,
         dataset_id=dataset_id,
         ruleset_id_text=ruleset_id,
         computed_at=finished_dt,
@@ -316,3 +344,118 @@ def _event_timestamp(event: dict[str, Any]) -> datetime:
 
 def _to_utc_iso(value: datetime) -> str:
     return value.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
+
+
+def _get_or_create_ruleset(db: Session, ruleset_id: str) -> Ruleset:
+    existing = db.query(Ruleset).filter(Ruleset.ruleset_id == ruleset_id).first()
+    if existing is not None:
+        return existing
+
+    ruleset = Ruleset(
+        ruleset_id=ruleset_id,
+        name=ruleset_id,
+        version=ruleset_id,
+        note="auto-created by replay",
+        is_active=False,
+        rules={},
+    )
+    db.add(ruleset)
+    db.flush()
+    return ruleset
+
+
+def _create_replay_run(db: Session, dataset_id: str, mode: str, started_dt: datetime) -> AttackRun:
+    run = AttackRun(
+        name=f"replay:{dataset_id}:{mode}",
+        attack_source="replay",
+        dataset_id=dataset_id,
+        status="running",
+        start_time=started_dt,
+        started_at=started_dt,
+    )
+    db.add(run)
+    db.flush()
+    return run
+
+
+def _persist_findings_and_coverage_evaluations(
+    db: Session,
+    dataset_dir: Path,
+    replay_run_id: uuid.UUID,
+    finished_dt: datetime,
+    attack_matches: list[AlertMatch],
+) -> None:
+    findings_path = dataset_dir / "findings.json"
+    if not findings_path.exists():
+        return
+
+    payload = json.loads(findings_path.read_text(encoding="utf-8"))
+    if not isinstance(payload, list):
+        return
+
+    alerted_event_ids = set(_sample_event_ids(attack_matches, limit=100000))
+    for finding_item in payload:
+        if not isinstance(finding_item, dict):
+            continue
+
+        finding_event_ids = _extract_finding_event_ids(finding_item)
+        covered = any(event_id in alerted_event_ids for event_id in finding_event_ids)
+        coverage_state = "covered" if covered else "not_covered"
+
+        finding = Finding(
+            attack_run_id=replay_run_id,
+            run_id=replay_run_id,
+            finding_type=str(finding_item.get("finding_type") or finding_item.get("type") or "unknown"),
+            title=_as_optional_str(finding_item.get("title")),
+            severity=_as_optional_str(finding_item.get("severity")),
+            technique=_as_optional_str(finding_item.get("technique")),
+            entrypoint_json=_as_optional_dict(finding_item.get("entrypoint_json")),
+            proof_json=_as_optional_dict(finding_item.get("proof_json")),
+            tags_json=_as_optional_dict(finding_item.get("tags_json")),
+            occurred_at=_parse_optional_timestamp(finding_item.get("occurred_at")),
+        )
+        db.add(finding)
+        db.flush()
+
+        evaluation = CoverageEvaluation(
+            attack_run_id=replay_run_id,
+            run_id=replay_run_id,
+            finding_id=finding.id,
+            scenario=f"replay:{dataset_dir.name}",
+            result="detected" if covered else "missed",
+            coverage_state=coverage_state,
+            window_end=finished_dt,
+            related_event_ids_json={"event_ids": finding_event_ids},
+            notes="auto-generated by replay",
+            evaluated_at=finished_dt,
+        )
+        db.add(evaluation)
+
+    db.commit()
+
+
+def _as_optional_dict(value: Any) -> Optional[dict[str, Any]]:
+    if isinstance(value, dict):
+        return value
+    return None
+
+
+def _as_optional_str(value: Any) -> Optional[str]:
+    if value is None:
+        return None
+    if isinstance(value, str):
+        return value
+    return str(value)
+
+
+def _parse_optional_timestamp(value: Any) -> Optional[datetime]:
+    if not isinstance(value, str) or not value.strip():
+        return None
+
+    normalized = value.strip()
+    if normalized.endswith("Z"):
+        normalized = normalized[:-1] + "+00:00"
+    parsed = datetime.fromisoformat(normalized)
+    if parsed.tzinfo is None:
+        return parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)

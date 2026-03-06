@@ -13,9 +13,9 @@ from app.db.base import Base
 class ReplayValidation(Base):
     __tablename__ = "replay_validations"
 
-    id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    attack_run_id: Mapped[Optional[uuid.UUID]] = mapped_column(Uuid(as_uuid=True), ForeignKey("attack_runs.id"), nullable=True)
-    proposal_id: Mapped[Optional[uuid.UUID]] = mapped_column(Uuid(as_uuid=True), ForeignKey("rule_proposals.id"), nullable=True)
+    id: Mapped[uuid.UUID] = mapped_column("validation_id", Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    attack_run_id: Mapped[Optional[uuid.UUID]] = mapped_column(Uuid(as_uuid=True), ForeignKey("attack_runs.run_id"), nullable=True)
+    proposal_id: Mapped[Optional[uuid.UUID]] = mapped_column(Uuid(as_uuid=True), ForeignKey("rule_proposals.proposal_id"), nullable=True)
     attack_dataset_id: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)
     baseline_dataset_id: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)
     replay_started_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)

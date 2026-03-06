@@ -13,11 +13,11 @@ from app.db.base import Base
 class RuleProposal(Base):
     __tablename__ = "rule_proposals"
 
-    id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    source_event_id: Mapped[Optional[uuid.UUID]] = mapped_column(Uuid(as_uuid=True), ForeignKey("events.id"), nullable=True)
+    id: Mapped[uuid.UUID] = mapped_column("proposal_id", Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    source_event_id: Mapped[Optional[uuid.UUID]] = mapped_column(Uuid(as_uuid=True), ForeignKey("events.event_id"), nullable=True)
     evaluation_id: Mapped[Optional[uuid.UUID]] = mapped_column(
         Uuid(as_uuid=True),
-        ForeignKey("coverage_evaluations.id"),
+        ForeignKey("coverage_evaluations.evaluation_id"),
         nullable=True,
     )
     title: Mapped[str] = mapped_column(String(256), nullable=False)

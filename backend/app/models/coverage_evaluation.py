@@ -13,10 +13,10 @@ from app.db.base import Base
 class CoverageEvaluation(Base):
     __tablename__ = "coverage_evaluations"
 
-    id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    attack_run_id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), ForeignKey("attack_runs.id"), nullable=False)
-    run_id: Mapped[Optional[uuid.UUID]] = mapped_column(Uuid(as_uuid=True), ForeignKey("attack_runs.id"), nullable=True)
-    finding_id: Mapped[Optional[uuid.UUID]] = mapped_column(Uuid(as_uuid=True), ForeignKey("findings.id"), nullable=True)
+    id: Mapped[uuid.UUID] = mapped_column("evaluation_id", Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    attack_run_id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), ForeignKey("attack_runs.run_id"), nullable=False)
+    run_id: Mapped[Optional[uuid.UUID]] = mapped_column(Uuid(as_uuid=True), ForeignKey("attack_runs.run_id"), nullable=True)
+    finding_id: Mapped[Optional[uuid.UUID]] = mapped_column(Uuid(as_uuid=True), ForeignKey("findings.finding_id"), nullable=True)
     ruleset_id: Mapped[Optional[uuid.UUID]] = mapped_column(Uuid(as_uuid=True), ForeignKey("rulesets.id"), nullable=True)
     scenario: Mapped[str] = mapped_column(String(128), nullable=False)
     result: Mapped[str] = mapped_column(String(64), nullable=False)

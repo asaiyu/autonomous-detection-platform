@@ -8,6 +8,8 @@ from pydantic import BaseModel, Field
 
 class RuleCreateRequest(BaseModel):
     mode: Literal["proposal", "ruleset"] = "proposal"
+    ruleset_id: str = "default"
+    ruleset_note: Optional[str] = None
     title: str
     rule_id: str
     rule_version: int = 1
@@ -22,5 +24,6 @@ class RuleCreateRequest(BaseModel):
 
 
 class RuleCreateResponse(BaseModel):
-    proposal_id: str
+    proposal_id: Optional[str] = None
+    ruleset_id: Optional[str] = None
     status: str

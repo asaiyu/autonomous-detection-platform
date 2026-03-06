@@ -13,7 +13,7 @@ from app.db.base import Base
 class CoverageSnapshot(Base):
     __tablename__ = "coverage_snapshots"
 
-    id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    id: Mapped[uuid.UUID] = mapped_column("snapshot_id", Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
     ruleset_id: Mapped[Optional[uuid.UUID]] = mapped_column(Uuid(as_uuid=True), ForeignKey("rulesets.id"), nullable=True)
     dataset_id: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)
     ruleset_id_text: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)

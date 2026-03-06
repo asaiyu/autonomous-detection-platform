@@ -13,7 +13,7 @@ from app.db.base import Base
 class AttackRun(Base):
     __tablename__ = "attack_runs"
 
-    id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    id: Mapped[uuid.UUID] = mapped_column("run_id", Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
     name: Mapped[str] = mapped_column(String(128), nullable=False)
     attack_source: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)
     dataset_id: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)

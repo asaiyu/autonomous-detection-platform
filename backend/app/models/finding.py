@@ -13,11 +13,11 @@ from app.db.base import Base
 class Finding(Base):
     __tablename__ = "findings"
 
-    id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    attack_run_id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), ForeignKey("attack_runs.id"), nullable=False)
-    run_id: Mapped[Optional[uuid.UUID]] = mapped_column(Uuid(as_uuid=True), ForeignKey("attack_runs.id"), nullable=True)
-    event_id: Mapped[Optional[uuid.UUID]] = mapped_column(Uuid(as_uuid=True), ForeignKey("events.id"), nullable=True)
-    alert_id: Mapped[Optional[uuid.UUID]] = mapped_column(Uuid(as_uuid=True), ForeignKey("alerts.id"), nullable=True)
+    id: Mapped[uuid.UUID] = mapped_column("finding_id", Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    attack_run_id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), ForeignKey("attack_runs.run_id"), nullable=False)
+    run_id: Mapped[Optional[uuid.UUID]] = mapped_column(Uuid(as_uuid=True), ForeignKey("attack_runs.run_id"), nullable=True)
+    event_id: Mapped[Optional[uuid.UUID]] = mapped_column(Uuid(as_uuid=True), ForeignKey("events.event_id"), nullable=True)
+    alert_id: Mapped[Optional[uuid.UUID]] = mapped_column(Uuid(as_uuid=True), ForeignKey("alerts.alert_id"), nullable=True)
     finding_type: Mapped[str] = mapped_column(String(64), nullable=False)
     title: Mapped[Optional[str]] = mapped_column(String(256), nullable=True)
     severity: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
