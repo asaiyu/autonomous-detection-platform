@@ -10,7 +10,10 @@ from sqlalchemy.orm import Session
 
 from app.db.session import get_db
 from app.models.alert import Alert
+from app.models.case import CaseRecord
 from app.schemas.alert import AlertEvidenceResponse, AlertListResponse, AlertResponse
+from app.schemas.case import CaseResponse, TriageRequest
+from app.services.triage import generate_triage_output
 
 router = APIRouter()
 
@@ -65,6 +68,39 @@ def get_alert_evidence(alert_id: UUID, db: Session = Depends(get_db)) -> AlertEv
     )
 
 
+@router.get("/{alert_id}/case", response_model=CaseResponse)
+def get_alert_case(alert_id: UUID, db: Session = Depends(get_db)) -> CaseResponse:
+    alert = db.query(Alert).filter(Alert.id == alert_id).first()
+    if alert is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="alert not found")
+
+    case = db.query(CaseRecord).filter(CaseRecord.alert_id == alert_id).first()
+    if case is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="case not found")
+
+    return _to_case_response(case)
+
+
+@router.post("/{alert_id}/triage", response_model=CaseResponse)
+def triage_alert(alert_id: UUID, payload: TriageRequest, db: Session = Depends(get_db)) -> CaseResponse:
+    alert = db.query(Alert).filter(Alert.id == alert_id).first()
+    if alert is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="alert not found")
+
+    triage = generate_triage_output(alert=alert, analyst_notes=payload.analyst_notes)
+    case = db.query(CaseRecord).filter(CaseRecord.alert_id == alert_id).first()
+    if case is None:
+        case = CaseRecord(alert_id=alert_id)
+        db.add(case)
+
+    case.notes_markdown = triage.case_notes
+    case.triage_json = triage.model_dump()
+
+    db.commit()
+    db.refresh(case)
+    return _to_case_response(case)
+
+
 def _to_alert_response(alert: Alert) -> AlertResponse:
     return AlertResponse(
         alert_id=str(alert.id),
@@ -83,6 +119,17 @@ def _to_alert_response(alert: Alert) -> AlertResponse:
         tags=alert.tags or [],
         metadata=alert.extra,
         created_at=_datetime_to_utc_iso(alert.created_at),
+    )
+
+
+def _to_case_response(case: CaseRecord) -> CaseResponse:
+    return CaseResponse(
+        case_id=str(case.id),
+        alert_id=str(case.alert_id),
+        notes_markdown=case.notes_markdown,
+        triage_json=case.triage_json,
+        created_at=_datetime_to_utc_iso(case.created_at),
+        updated_at=_datetime_to_utc_iso(case.updated_at),
     )
 
 

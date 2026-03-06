@@ -129,3 +129,25 @@ curl -X POST http://localhost:8000/api/replay \
     "mode": "full_evaluation"
   }'
 ```
+
+## P2 APIs (Triage, Audit, MCP Wrappers)
+Generate deterministic triage + case record for an alert:
+```bash
+curl -X POST http://localhost:8000/api/alerts/<alert_id>/triage \
+  -H "Content-Type: application/json" \
+  -d '{"analyst_notes":"Validated suspicious outbound pattern"}'
+```
+
+Audit artifact exports:
+```bash
+curl "http://localhost:8000/api/audit/coverage/snapshot?dataset_id=juice_shop_local_v1&ruleset_id=default"
+curl "http://localhost:8000/api/audit/coverage/diff?dataset_id=juice_shop_local_v1&from_ruleset=default&to_ruleset=default"
+curl "http://localhost:8000/api/audit/runs/<run_id>/report"
+```
+
+MCP-style wrappers:
+```bash
+curl -X POST http://localhost:8000/api/mcp/search_events \
+  -H "Content-Type: application/json" \
+  -d '{"query":"login","limit":20}'
+```

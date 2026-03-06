@@ -8,6 +8,7 @@ from app.db.base import Base
 from app.models import (  # noqa: F401
     alert,
     attack_run,
+    case,
     coverage_evaluation,
     coverage_snapshot,
     event,
