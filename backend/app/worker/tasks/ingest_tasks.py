@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from app.worker.celery_app import celery_app
 
 

@@ -33,6 +33,9 @@ services:
       - "8000:8000"
     volumes:
       - ./backend:/app
+      - ./rules:/rules
+      - ./tests:/tests
+      - ./datasets:/datasets
     depends_on:
       - postgres
       - redis
@@ -48,6 +51,9 @@ services:
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
     volumes:
       - ./backend:/app
+      - ./rules:/rules
+      - ./tests:/tests
+      - ./datasets:/datasets
     depends_on:
       - postgres
       - redis

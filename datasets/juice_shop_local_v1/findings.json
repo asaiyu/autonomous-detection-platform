@@ -1,0 +1,12 @@
+[
+  {
+    "finding_id": "f-1",
+    "event_id": "a2222222-2222-2222-2222-222222222222",
+    "title": "Suspicious outbound connection"
+  },
+  {
+    "finding_id": "f-2",
+    "event_id": "a3333333-3333-3333-3333-333333333333",
+    "title": "Encoded PowerShell execution"
+  }
+]

@@ -8,6 +8,7 @@ autonomous-detection-platform/
 ├── REPO_STRUCTURE.md
 ├── docker-compose.yml
 ├── docs/
+│   ├── 08_event_schema.md
 │   └── 18_database_schema.md
 ├── backend/
 │   ├── Dockerfile
@@ -18,7 +19,8 @@ autonomous-detection-platform/
 │   │   ├── env.py
 │   │   ├── script.py.mako
 │   │   └── versions/
-│   │       └── 0001_create_initial_tables.py
+│   │       ├── 0001_create_initial_tables.py
+│   │       └── 0002_event_json_cols.py
 │   ├── app/
 │   │   ├── __init__.py
 │   │   ├── main.py
@@ -43,6 +45,13 @@ autonomous-detection-platform/
 │   │   │   ├── __init__.py
 │   │   │   ├── base.py
 │   │   │   └── session.py
+│   │   ├── schemas/
+│   │   │   ├── __init__.py
+│   │   │   ├── event.py
+│   │   │   └── ingest.py
+│   │   ├── services/
+│   │   │   ├── __init__.py
+│   │   │   └── event_normalization.py
 │   │   ├── models/
 │   │   │   ├── __init__.py
 │   │   │   ├── alert.py

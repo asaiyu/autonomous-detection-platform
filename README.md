@@ -1,7 +1,7 @@
 # autonomous-detection-platform
 
 MVP scaffold for an autonomous detection platform with:
-- FastAPI backend (`/api/health` + modular stub routers)
+- FastAPI backend (`/api/health`, SIEM ingest path, events query APIs)
 - PostgreSQL + SQLAlchemy + Alembic
 - Celery worker skeleton (Redis broker/backend)
 - Next.js TypeScript frontend skeleton
@@ -9,6 +9,7 @@ MVP scaffold for an autonomous detection platform with:
 
 ## Docs
 - Architecture/schema references are in `docs/`.
+- Canonical event schema: `docs/08_event_schema.md`.
 - MVP schema doc: `docs/18_database_schema.md`.
 - Expected project layout: `REPO_STRUCTURE.md`.
 
@@ -45,6 +46,18 @@ Run migrations from `backend/`:
 alembic upgrade head
 ```
 
+## Deterministic Rule Engine (v1)
+- Rules are loaded from `rules/*.yaml`.
+- Supported operators/composition:
+  - `all` / `any` / `not`
+  - `equals`, `iequals`, `contains`, `icontains`, `regex`
+  - `exists`, `not_exists`
+  - `in`, `nin`
+  - `gt`, `gte`, `lt`, `lte`, `between`
+- Rule types:
+  - `single`
+  - `sequence` (exactly 2 stages) with `join_keys` + `window_seconds`
+
 ## Worker
 Start worker from `backend/`:
 ```bash
@@ -59,8 +72,60 @@ npm run dev
 ```
 
 ## Tests
-Health smoke test:
+Smoke + integration tests:
 ```bash
 cd backend
 pytest -q
+```
+
+Run deterministic rule fixtures (`/tests/rules/*`):
+```bash
+cd backend
+python -m app.detection.test_runner
+```
+
+## SIEM Ingest API Examples
+Single event ingest (`dns`):
+```bash
+curl -X POST http://localhost:8000/api/ingest/event \
+  -H "Content-Type: application/json" \
+  -d '{
+    "source_type": "dns",
+    "timestamp": "2026-03-06T12:00:00Z",
+    "raw_event": {
+      "query": "example.com",
+      "qtype": "A",
+      "rcode": "NOERROR",
+      "src_ip": "10.0.0.10",
+      "dst_ip": "8.8.8.8"
+    }
+  }'
+```
+
+Bulk ingest (`NDJSON`):
+```bash
+cat <<'NDJSON' | curl -X POST http://localhost:8000/api/ingest/bulk \
+  -H "Content-Type: application/x-ndjson" \
+  --data-binary @-
+{"source_type":"http","timestamp":"2026-03-06T10:00:00Z","raw_event":{"method":"GET","url":"https://app.local/login","status_code":200}}
+{"source_type":"dns","timestamp":"2026-03-06T10:01:00Z","raw_event":{"query":"internal.local","record_type":"AAAA"}}
+NDJSON
+```
+
+Query events:
+```bash
+curl "http://localhost:8000/api/events?source_type=dns&limit=20"
+curl "http://localhost:8000/api/events?q=login&start_timestamp=2026-03-06T00:00:00Z&end_timestamp=2026-03-07T00:00:00Z"
+curl "http://localhost:8000/api/events/<event_id>"
+```
+
+Replay evaluation:
+```bash
+curl -X POST http://localhost:8000/api/replay \
+  -H "Content-Type: application/json" \
+  -d '{
+    "dataset_id": "juice_shop_local_v1",
+    "ruleset_id": "default",
+    "mode": "full_evaluation"
+  }'
 ```

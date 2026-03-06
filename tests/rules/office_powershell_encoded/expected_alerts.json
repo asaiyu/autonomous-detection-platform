@@ -1,0 +1,7 @@
+{
+  "should_fire": true,
+  "expected_count": 1,
+  "evidence_event_ids_contains": [
+    "11111111-1111-1111-1111-111111111111"
+  ]
+}

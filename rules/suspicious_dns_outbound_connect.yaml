@@ -1,0 +1,60 @@
+id: suspicious_dns_outbound_connect
+name: "Suspicious DNS followed by outbound connect"
+description: "Detects DNS query to suspicious domain followed by outbound connection."
+severity: medium
+enabled: true
+log_sources:
+  - dns
+  - firewall
+tags: [dns, egress]
+version: 1
+created_at: "2026-03-04"
+author: "manual"
+references: []
+
+detect:
+  type: sequence
+  window_seconds: 300
+  join_keys: [host.hostname, user.name]
+  stages:
+    - id: stage1
+      where:
+        all:
+          - field: source.type
+            op: equals
+            value: dns
+          - field: dns.query
+            op: regex
+            value: "(^|\\.)evil-example\\.com$"
+    - id: stage2
+      where:
+        all:
+          - field: source.type
+            op: equals
+            value: firewall
+          - field: network.direction
+            op: iequals
+            value: outbound
+          - field: network.action
+            op: iequals
+            value: allow
+
+output:
+  alert_title: "Suspicious DNS + outbound connect"
+  alert_category: "network"
+  alert_type: "suspicious_egress"
+  confidence: 0.7
+  default_status: "open"
+
+evidence:
+  include_fields:
+    - event_id
+    - timestamp
+    - source.type
+    - host.hostname
+    - user.name
+    - network.src_ip
+    - network.dst_ip
+    - network.direction
+    - network.action
+    - dns.query
