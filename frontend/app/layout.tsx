@@ -14,6 +14,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
         <header className="header">
           <h1>Autonomous Detection Platform</h1>
           <nav>
+            <Link href="/">Overview</Link>
             <Link href="/coverage">Coverage</Link>
             <Link href="/runs">Runs</Link>
             <Link href="/alerts">Alerts</Link>
